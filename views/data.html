@@ -9,12 +9,20 @@
 </head>
 <body>
   <div class="container mt-5">
-    <h1>Data Pengguna</h1>
+    <div class="row">
+      <div class="col-md-8">
+        <h1>Data mahasiswa</h1>
+      </div>
+      <div class="col-md-4 flex">
+        <a href="/register" type="button" class="btn btn-primary justify-content-end">Register mahasiswa</a>
+      </div>
+    </div>
     <div class="row mt-3">
       <div class="col">
         <table class="table">
           <thead>
             <tr>
+              <th scope="col">No</th>
               <th scope="col">Nama</th>
               <th scope="col">Alamat</th>
               <th scope="col">Email</th>
@@ -35,29 +43,30 @@
   <script>
     // Ketika halaman dimuat, ambil data pengguna dari API
     document.addEventListener('DOMContentLoaded', async () => {
-      try {
-        const response = await axios.get('/user');
+    try {
+      const response = await axios.get('/user');
+      const userDataArray = response.data;
 
-        const userData = response.data;
-        const userDataContainer = document.getElementById('userData');
+      const userDataContainer = document.getElementById('userData');
+      let num = 1;
 
-        // Perulangan untuk setiap pengguna
-        userData.forEach(user => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${user.nama}</td>
-            <td>${user.alamat}</td>
-            <td>${user.email}</td>
-            <td>${user.no_hp}</td>
-          `;
-          userDataContainer.appendChild(row);
-        });
-      } catch (error) {
-        console.error('Error saat mengambil data pengguna:', error);
-        const userDataContainer = document.getElementById('userData');
-        userDataContainer.innerHTML = `<tr><td colspan="4">Terjadi kesalahan saat mengambil data pengguna.</td></tr>`;
-      }
-    });
+      userDataArray.forEach(user => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${num++}</td>
+          <td>${user.nama}</td>
+          <td>${user.alamat}</td>
+          <td>${user.email}</td>
+          <td>${user.no_hp}</td>
+        `;
+        userDataContainer.appendChild(row);
+      });
+    } catch (error) {
+      console.error('Error saat mengambil data pengguna:', error);
+      const userDataContainer = document.getElementById('userData');
+      userDataContainer.innerHTML = `<tr><td colspan="5">Terjadi kesalahan saat mengambil data pengguna.</td></tr>`;
+    }
+  });
   </script>
 </body>
 </html>

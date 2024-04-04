@@ -1,32 +1,9 @@
-// require('dotenv').config()
-
-// const Redis = require('ioredis');
-
-// const redisDemo = async () => {
-//   // Connect to Redis at 127.0.0.1, port 6379.
-//   const redisClient = new Redis({
-//     host: process.env.REDIS_HOST,
-//     port: process.env.REDIS_PORT,
-//   });
-
-//   // Set key "myname" to have value "Simon Prickett".
-//   await redisClient.set('myname', 'Simon Prickett');
-
-//   // Get the value held at key "myname" and log it.
-//   const value = await redisClient.get('myname');
-//   console.log(value);
-
-//   // Disconnect from Redis.
-//   redisClient.quit();
-// };
-
-// redisDemo();
-
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const { Pool } = require('pg');
 const Redis = require('ioredis');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = 5001;
@@ -50,65 +27,81 @@ const redisClient = new Redis({
   port: process.env.REDIS_PORT,
 });
 
+app.get('/', (req, res) => {
+  res.redirect('/list-mahasiswa');
+});
+
 app.get('/register', (req, res) => {
   res.sendFile(__dirname + '/views/register.html');
 });
+
+app.get('/list-mahasiswa', (req, res) => {
+  res.sendFile(__dirname + '/views/data.html');
+})
+
 // Rute untuk registrasi
 app.post('/register', async (req, res) => {
-  const { nama,alamat, email, no_hp } = req.body;
-
+  const { nama, alamat, email, no_hp } = req.body;
   try {
-    // Simpan data ke PostgreSQL
-    const query = `
+    // Simpan data ke PostgreSQL dalam transaksi
+    await pool.query('BEGIN');
+    const insertQuery = `
       INSERT INTO tb_mahasiswa (nama, alamat, email, no_hp)
       VALUES ($1, $2, $3, $4)
     `;
-    await pool.query(query, [nama,alamat, email, no_hp]);
-
-    // Simpan data ke Redis
-    //await redisClient.set(nama, JSON.stringify({ email, no_hp }));
-    await redisClient.hmset("mahasiswa",'nama',nama, 'email', email, 'alamat', alamat, 'no_hp', no_hp)
-
+    await pool.query(insertQuery, [nama, alamat, email, no_hp]);
+    await pool.query('COMMIT');
+  
+    // Simpan data ke Redis dengan kunci unik
+    const redisKey = `mahasiswa:${uuidv4()}`; // Menggunakan uuidv4() untuk membuat UUID unik
+    await redisClient.hmset(redisKey, 'nama', nama, 'email', email, 'alamat', alamat, 'no_hp', no_hp);
+  
     res.status(201).send('Registrasi berhasil.');
   } catch (error) {
     console.error('Error saat registrasi:', error);
+    await pool.query('ROLLBACK'); // Gulung transaksi jika terjadi kesalahan
     res.status(500).send('Terjadi kesalahan saat melakukan registrasi.');
   }
 });
 
 app.get('/user', async (req, res) => {
-  const { nama } = req.params;
-
   try {
-    // Mengambil data pengguna dari Redis
-    const userData = await redisClient.hgetall("mahasiswa");
+  const allKeys = await redisClient.keys('mahasiswa:*');
 
-    if (userData) {
-      res.json(userData);
-    } else {
-      res.status(404).send('Pengguna tidak ditemukan.');
-    }
+  if (allKeys.length === 0) {
+      res.status(404).send('Data mahasiswa tidak ditemukan.');
+      return;
+  }
+
+  const allUserData = [];
+
+  for (const key of allKeys) {
+      const userData = await redisClient.hgetall(key);
+      allUserData.push(userData);
+  }
+
+  res.json(allUserData);
+  
   } catch (error) {
-    console.error('Error saat mengambil data pengguna dari Redis:', error);
-    res.status(500).send('Terjadi kesalahan saat mengambil data pengguna dari Redis.');
+      console.error('Error saat mengambil data mahasiswa dari Redis:', error);
+      res.status(500).send('Terjadi kesalahan saat mengambil data mahasiswa dari Redis.');
   }
 });
 
 app.get('/user/name', async (req, res) => {
   const { nama } = req.params;
-
   try {
-    // Mengambil data pengguna dari Redis
-    const userData = await redisClient.hget("mahasiswa",'nama');
+      // Mengambil data pengguna dari DragonFly
+      const userData = await redisClient.hget("mahasiswa",'nama');
 
-    if (userData) {
+      if (userData) {
       res.json(userData);
-    } else {
+      } else {
       res.status(404).send('Pengguna tidak ditemukan.');
-    }
+      }
   } catch (error) {
-    console.error('Error saat mengambil data pengguna dari Redis:', error);
-    res.status(500).send('Terjadi kesalahan saat mengambil data pengguna dari Redis.');
+      console.error('Error saat mengambil data pengguna dari Redis:', error);
+      res.status(500).send('Terjadi kesalahan saat mengambil data pengguna dari Redis.');
   }
 });
 // Server berjalan
